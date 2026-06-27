@@ -4,12 +4,13 @@ import './App.css';
 
 export default function App() {
   // Form State
-  const [payeeName, setPayeeName] = useState('');
-  const [upiId, setUpiId] = useState('');
+  const [payeeName, setPayeeName] = useState('Glitch Galaxy');
+  const [upiId, setUpiId] = useState('glitchgalaxy.in@okhdfcbank');
   const [amount, setAmount] = useState('');
   const [remarks, setRemarks] = useState('');
   const [customerName, setCustomerName] = useState('');
-  const [invoiceId, setInvoiceId] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState(() => String(Math.floor(1000 + Math.random() * 9000)));
+  const [whatsappNumber, setWhatsappNumber] = useState('');
 
   // Visibility toggles for fields on poster/receipt
   const [showPayeeName, setShowPayeeName] = useState(true);
@@ -18,16 +19,19 @@ export default function App() {
   const [showCustomerName, setShowCustomerName] = useState(true);
   const [showInvoiceId, setShowInvoiceId] = useState(true);
 
+  // Derived state
+  const fullInvoiceId = invoiceNumber.trim() ? `INV/26-27/${invoiceNumber.trim()}` : '';
 
   // Canvas / QR State
   const [qrSize, setQrSize] = useState(260);
   const [qrX, setQrX] = useState(211);
-  const [qrY, setQrY] = useState(455); // Shifted down to accommodate the logo above it
+  const [qrY, setQrY] = useState(455); // Original Y coordinate
   const qrColorDark = '#000000'; // Pure black for cream template
   const qrColorLight = '#ffffff'; // White background for cream template
 
   // UI state
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showWhatsappModal, setShowWhatsappModal] = useState(false);
 
   // References
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -37,17 +41,18 @@ export default function App() {
   const resetCoordinates = () => {
     setQrSize(260);
     setQrX(211);
-    setQrY(455); // Shifted down to accommodate the logo above it
+    setQrY(455); // Original Y coordinate
   };
 
   // Reset all form details and coordinates
   const resetFormDetails = () => {
-    setPayeeName('');
-    setUpiId('');
+    setPayeeName('Glitch Galaxy');
+    setUpiId('glitchgalaxy.in@okhdfcbank');
     setAmount('');
     setRemarks('');
     setCustomerName('');
-    setInvoiceId('');
+    setInvoiceNumber(String(Math.floor(1000 + Math.random() * 9000)));
+    setWhatsappNumber('');
     setShowPayeeName(true);
     setShowUpiId(true);
     setShowAmount(true);
@@ -60,7 +65,7 @@ export default function App() {
   // Auto center QR both horizontally and vertically
   const autoCenterBoth = () => {
     const canvasWidth = 682;
-    const placeholderCenterY = 585; // Center Y for QR code area
+    const placeholderCenterY = 585; // Original Center Y for QR code area
     setQrX(Math.round((canvasWidth - qrSize) / 2));
     setQrY(Math.round(placeholderCenterY - (qrSize / 2)));
   };
@@ -87,9 +92,15 @@ export default function App() {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      // Define static dimensions
-      canvas.width = 682;
-      canvas.height = 1024;
+      const scale = 2; // Resolution multiplier
+
+      // Define static dimensions scaled up
+      canvas.width = 682 * scale;
+      canvas.height = 1024 * scale;
+
+      // Enable high quality rendering parameters
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
 
       // Construct UPI URL format
       // upi://pay?pa=UPI_ID&pn=NAME&am=AMOUNT&cu=CURRENCY_CODE&tr=INVOICE_ID&tn=REMARKS
@@ -98,8 +109,8 @@ export default function App() {
         upiUrl += `&am=${amount}`;
       }
       upiUrl += `&cu=INR`; // default currency code
-      if (invoiceId) {
-        upiUrl += `&tr=${encodeURIComponent(invoiceId)}`;
+      if (fullInvoiceId) {
+        upiUrl += `&tr=${encodeURIComponent(fullInvoiceId)}`;
       }
       
       let finalRemarks = remarks;
@@ -131,27 +142,32 @@ export default function App() {
       // Clear Canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // Fill canvas background with solid white
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
       // --- LIGHT TEMPLATE MODE ---
       try {
+        const shiftY = 0;
         // Load base image
         const img = await loadImage('/assets/template_light.jpg');
         if (!active) return;
 
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, shiftY * scale, canvas.width, canvas.height);
 
         // --- SCAN AND DETECT TOP BADGE (before cream-to-white conversion) ---
-        let targetX1 = 217;
-        let targetX2 = 465;
-        let targetY1 = 148;
-        let targetY2 = 242;
+        let targetX1 = 217 * scale;
+        let targetX2 = 465 * scale;
+        let targetY1 = (148 + shiftY) * scale;
+        let targetY2 = (242 + shiftY) * scale;
 
         try {
           const scanData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-          let minX = 999, maxX = 0, minY = 999, maxY = 0;
+          let minX = 999 * scale, maxX = 0, minY = 999 * scale, maxY = 0;
           let found = false;
-          // Scan range around the top logo badge
-          for (let y = 120; y < 280; y++) {
-            for (let x = 150; x < 530; x++) {
+          // Scan range around the top logo badge (shifted)
+          for (let y = (120 + shiftY) * scale; y < (280 + shiftY) * scale; y++) {
+            for (let x = 150 * scale; x < 530 * scale; x++) {
               const idx = (y * canvas.width + x) * 4;
               const r = scanData[idx];
               const g = scanData[idx+1];
@@ -165,7 +181,7 @@ export default function App() {
               }
             }
           }
-          if (found && (maxX - minX) > 100 && (maxY - minY) > 40) {
+          if (found && (maxX - minX) > 100 * scale && (maxY - minY) > 40 * scale) {
             targetX1 = minX;
             targetX2 = maxX;
             targetY1 = minY;
@@ -177,10 +193,10 @@ export default function App() {
 
         const targetW = targetX2 - targetX1;
         const targetH = targetY2 - targetY1;
-        const captureX = targetX1 - 8;
-        const captureY = targetY1 - 8;
-        const captureW = targetW + 16;
-        const captureH = targetH + 16;
+        const captureX = targetX1 - 8 * scale;
+        const captureY = targetY1 - 8 * scale;
+        const captureW = targetW + 16 * scale;
+        const captureH = targetH + 16 * scale;
 
         // Erase the top badge
         ctx.fillStyle = '#ffffff';
@@ -209,41 +225,39 @@ export default function App() {
 
         // --- ERASE MESSY HAND-DRAWN ACCENTS & DRAW CLEAN "SCAN TO PAY" ---
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(120, 244, 442, 111);
+        ctx.fillRect(120 * scale, (244 + shiftY) * scale, 442 * scale, 111 * scale);
 
         ctx.fillStyle = '#000000';
-        ctx.font = '800 24px "Inter", sans-serif';
+        ctx.font = `800 ${24 * scale}px "Inter", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         if ('letterSpacing' in ctx) {
           // @ts-ignore
-          ctx.letterSpacing = '3px';
+          ctx.letterSpacing = `${3 * scale}px`;
         }
-        ctx.fillText('SCAN TO PAY', 341, 300);
+        ctx.fillText('SCAN TO PAY', 341 * scale, (300 + shiftY) * scale);
         if ('letterSpacing' in ctx) {
           // @ts-ignore
           ctx.letterSpacing = '0px';
         }
 
-
-
         // Cover only the inner content area — leave template dashed border lines intact
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(168, 318, 346, 372);
+        ctx.fillRect(168 * scale, (318 + shiftY) * scale, 346 * scale, 372 * scale);
 
         // Redraw the two vertical dashed border lines that the white fill may have covered
         ctx.strokeStyle = '#cccccc';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([6, 6]);
+        ctx.lineWidth = 1 * scale;
+        ctx.setLineDash([6 * scale, 6 * scale]);
         // Left dashed line
         ctx.beginPath();
-        ctx.moveTo(155, 244);
-        ctx.lineTo(155, 700);
+        ctx.moveTo(155 * scale, (244 + shiftY) * scale);
+        ctx.lineTo(155 * scale, (700 + shiftY) * scale);
         ctx.stroke();
         // Right dashed line
         ctx.beginPath();
-        ctx.moveTo(527, 244);
-        ctx.lineTo(527, 700);
+        ctx.moveTo(527 * scale, (244 + shiftY) * scale);
+        ctx.lineTo(527 * scale, (700 + shiftY) * scale);
         ctx.stroke();
         ctx.setLineDash([]);
 
@@ -252,12 +266,12 @@ export default function App() {
           const logoImg = await loadImage('/assets/logo_glitch.png');
           if (active) {
             // Centred in the gap between SCAN TO PAY (Y=300) and QR brackets (~Y=455)
-            const destW = 75;
+            const destW = 75 * scale;
             const destH = Math.round((logoImg.height / logoImg.width) * destW);
             const destX = Math.round((canvas.width - destW) / 2);
-            // Gap midpoint: (318 + 455) / 2 = 386
-            const destY = Math.round(386 - destH / 2);
-            const radius = 12;
+            // Gap midpoint: (318 + 455) / 2 = 386 -> shift by shiftY
+            const destY = Math.round((386.5 + shiftY) * scale - destH / 2);
+            const radius = 12 * scale;
 
             // Clip to a rounded rectangle before drawing
             ctx.save();
@@ -285,15 +299,14 @@ export default function App() {
           console.error('Error drawing Glitch Galaxy logo:', e);
         }
 
-        // Re-draw corner brackets around the QR space (X=231 to 451, Y=410 to 630)
-        // Make brackets pure black to match the clean B&W poster aesthetic
+        // Re-draw corner brackets around the QR space
         ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 4;
-        const bracketLen = 24;
-        const bOffset = 14; // Padding offset outward from QR box
-        const bx = qrX - bOffset;
-        const by = qrY - bOffset;
-        const bs = qrSize + (bOffset * 2);
+        ctx.lineWidth = 4 * scale;
+        const bracketLen = 24 * scale;
+        const bOffset = 14 * scale; // Padding offset outward from QR box
+        const bx = qrX * scale - bOffset;
+        const by = qrY * scale - bOffset;
+        const bs = qrSize * scale + (bOffset * 2);
 
         // Top Left Bracket
         ctx.beginPath();
@@ -326,17 +339,17 @@ export default function App() {
         // Draw custom generated QR Code on top
         const qrImg = await loadImage(qrDataUrl);
         if (!active) return;
-        ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+        ctx.drawImage(qrImg, qrX * scale, qrY * scale, qrSize * scale, qrSize * scale);
 
         // --- REPLACE NAVI LOGO WITH 60+ APPS ---
-        // Cover Navi logo (clear region from X = 550 to 635, Y = 850 to 950)
+        // Cover Navi logo (clear region)
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(550, 850, 85, 100);
+        ctx.fillRect(550 * scale, (850 + shiftY) * scale, 85 * scale, 100 * scale);
 
         // Draw "60+" circular badge (larger size to match PhonePe)
-        const badgeCenterX = 590;
-        const badgeCenterY = 900; // Center aligned vertically with other logos
-        const badgeRadius = 23; // Larger size matching PhonePe circle
+        const badgeCenterX = 590 * scale;
+        const badgeCenterY = (900 + shiftY) * scale; // Center aligned vertically with other logos
+        const badgeRadius = 23 * scale; // Larger size matching PhonePe circle
 
         ctx.fillStyle = '#000000'; // Match pure black-and-white theme
         ctx.beginPath();
@@ -345,17 +358,19 @@ export default function App() {
 
         // Draw "60+" text inside circle
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 13px "Space Mono", monospace';
+        ctx.font = `bold ${13 * scale}px "Space Mono", monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('60+', badgeCenterX, badgeCenterY);
 
         // Draw "Apps" label below circle (aligned horizontally with other labels)
         ctx.fillStyle = '#444444'; // Muted dark label color
-        ctx.font = '500 12px "Inter", sans-serif';
+        ctx.font = `500 ${12 * scale}px "Inter", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'alphabetic';
-        ctx.fillText('Apps', badgeCenterX, 942);
+        ctx.fillText('Apps', badgeCenterX, (942 + shiftY) * scale);
+
+        // Warning banner removed
 
         // --- DRAW TRANSACTION RECEIPT CARD AT THE TOP ---
         const receiptFields: { label: string; value: string }[] = [];
@@ -368,8 +383,8 @@ export default function App() {
         if (showCustomerName && customerName.trim()) {
           receiptFields.push({ label: 'CUSTOMER', value: customerName.trim() });
         }
-        if (showInvoiceId && invoiceId.trim()) {
-          receiptFields.push({ label: 'INVOICE ID', value: invoiceId.trim() });
+        if (showInvoiceId && fullInvoiceId.trim()) {
+          receiptFields.push({ label: 'INVOICE ID', value: fullInvoiceId.trim() });
         }
         if (showAmount && amount.trim()) {
           const parsedAmount = parseFloat(amount);
@@ -383,17 +398,17 @@ export default function App() {
 
         // Draw Receipt Box (centered vertically where the Glitch Galaxy badge used to be, shifted up by 46px)
         const centerY = (targetY1 + targetY2) / 2;
-        const cardW = 500;
-        const cardH = 190;
+        const cardW = 500 * scale;
+        const cardH = 190 * scale;
         const cardX = Math.round((canvas.width - cardW) / 2);
-        const cardY = Math.round(centerY - cardH / 2) - 46;
+        const cardY = Math.round(centerY - cardH / 2) - 46 * scale;
 
         ctx.fillStyle = '#fafafa'; // Light grey/white receipt card background
         ctx.strokeStyle = '#000000'; // Pure black borders
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 1.5 * scale;
         ctx.beginPath();
         if (typeof ctx.roundRect === 'function') {
-          ctx.roundRect(cardX, cardY, cardW, cardH, 6);
+          ctx.roundRect(cardX, cardY, cardW, cardH, 6 * scale);
         } else {
           ctx.rect(cardX, cardY, cardW, cardH);
         }
@@ -402,53 +417,50 @@ export default function App() {
 
         // Draw Receipt Header
         ctx.fillStyle = '#000000';
-        ctx.font = 'bold 13px "Space Mono", monospace';
+        ctx.font = `bold ${13 * scale}px "Space Mono", monospace`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText('TRANSACTION RECEIPT', cardX + 16, cardY + 19);
-
-
-
+        ctx.fillText('TRANSACTION RECEIPT', cardX + 16 * scale, cardY + 19 * scale);
 
         // Draw Header divider dashed line
         ctx.strokeStyle = '#cccccc';
-        ctx.lineWidth = 1.2;
-        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1.2 * scale;
+        ctx.setLineDash([4 * scale, 4 * scale]);
         ctx.beginPath();
-        ctx.moveTo(cardX + 16, cardY + 38);
-        ctx.lineTo(cardX + cardW - 16, cardY + 36);
+        ctx.moveTo(cardX + 16 * scale, cardY + 38 * scale);
+        ctx.lineTo(cardX + cardW - 16 * scale, cardY + 36 * scale);
         ctx.stroke();
         ctx.setLineDash([]); // reset line dash
 
         // Draw Key-Value rows dynamically centered in the remaining height
         if (receiptFields.length > 0) {
-          const itemHeight = 22;
-          const startY = cardY + 38 + (cardH - 38 - 16 - (receiptFields.length * itemHeight)) / 2 + (itemHeight / 2);
+          const itemHeight = 22 * scale;
+          const startY = cardY + 38 * scale + (cardH - 38 * scale - 16 * scale - (receiptFields.length * itemHeight)) / 2 + (itemHeight / 2);
 
           receiptFields.forEach((field, index) => {
             const y = startY + (index * itemHeight);
 
             // Draw label
             ctx.fillStyle = '#666666';
-            ctx.font = '700 11px "Space Mono", monospace';
+            ctx.font = `700 ${11 * scale}px "Space Mono", monospace`;
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
-            ctx.fillText(field.label, cardX + 16, y);
+            ctx.fillText(field.label, cardX + 16 * scale, y);
 
             // Draw value
             ctx.fillStyle = '#000000';
-            ctx.font = '600 14px "Inter", sans-serif';
+            ctx.font = `600 ${14 * scale}px "Inter", sans-serif`;
             ctx.textAlign = 'right';
             ctx.textBaseline = 'middle';
-            ctx.fillText(field.value, cardX + cardW - 16, y);
+            ctx.fillText(field.value, cardX + cardW - 16 * scale, y);
           });
         } else {
           // Empty state placeholder
           ctx.fillStyle = '#888888';
-          ctx.font = 'italic 11px "Inter", sans-serif';
+          ctx.font = `italic ${11 * scale}px "Inter", sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('Scan to Pay using any UPI app', cardX + (cardW / 2), cardY + 105);
+          ctx.fillText('Scan to Pay using any UPI app', cardX + (cardW / 2), cardY + 105 * scale);
         }
 
         // Reset alignment properties
@@ -477,7 +489,7 @@ export default function App() {
     amount,
     remarks,
     customerName,
-    invoiceId,
+    fullInvoiceId,
     showPayeeName,
     showUpiId,
     showAmount,
@@ -501,15 +513,126 @@ export default function App() {
     // Create download link
     const downloadLink = document.createElement('a');
     
-    // Format filename based on template and payee name
-    const sanitizedName = payeeName.trim().replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-    downloadLink.download = `upi_qr_${sanitizedName || 'code'}.png`;
+    // Format filename based on invoice ID and customer name
+    const invoicePart = fullInvoiceId.trim().replace(/[^a-zA-Z0-9]/g, '_');
+    const customerPart = customerName.trim().replace(/[^a-zA-Z0-9]/g, '_');
+    
+    let fileName = '';
+    if (invoicePart && customerPart) {
+      fileName = `${invoicePart}_${customerPart}`;
+    } else if (invoicePart) {
+      fileName = invoicePart;
+    } else if (customerPart) {
+      fileName = customerPart;
+    } else {
+      fileName = 'glitch_galaxy_qr';
+    }
+    
+    downloadLink.download = `${fileName}.png`;
     downloadLink.href = pngUrl;
     
     // Trigger download
     document.body.appendChild(downloadLink);
     downloadLink.click();
     document.body.removeChild(downloadLink);
+  };
+
+  const handleWhatsAppShare = () => {
+    // 1. Auto download the poster
+    handleDownload();
+
+    // 2. Open choice modal
+    setShowWhatsappModal(true);
+  };
+
+  const executeWhatsAppLink = (mode: 'web' | 'app') => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // Construct text message
+    let text = `*Payment Details*\n`;
+    text += `• *Payee Name:* ${payeeName}\n`;
+    text += `• *UPI ID:* ${upiId}\n`;
+    if (amount.trim()) {
+      const parsedAmount = parseFloat(amount);
+      if (!isNaN(parsedAmount)) {
+        text += `• *Amount:* INR ${parsedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n`;
+      }
+    }
+    if (customerName.trim()) {
+      text += `• *Customer:* ${customerName.trim()}\n`;
+    }
+    if (fullInvoiceId) {
+      text += `• *Invoice:* ${fullInvoiceId}\n`;
+    }
+    if (remarks.trim()) {
+      text += `• *Remarks:* ${remarks.trim()}\n`;
+    }
+    text += `\n*NOTICE: When uploading the QR in UPI apps, the transaction amount is limited to ₹2000. Please scan the QR code manually using your camera to pay.*`;
+
+    // Clean phone number
+    const cleanPhone = whatsappNumber.replace(/[^\d+]/g, '');
+    
+    // Construct query parameters; omit 'phone' if empty so WhatsApp prompts for contact choice
+    const queryParams = [];
+    if (cleanPhone) {
+      queryParams.push(`phone=${encodeURIComponent(cleanPhone)}`);
+    }
+    queryParams.push(`text=${encodeURIComponent(text)}`);
+    const queryString = queryParams.join('&');
+
+    let finalUrl = '';
+    if (mode === 'web') {
+      finalUrl = `https://web.whatsapp.com/send?${queryString}`;
+    } else {
+      finalUrl = `https://api.whatsapp.com/send?${queryString}`;
+    }
+
+    try {
+      // 1. Prepare PNG blob and file synchronously from canvas to avoid async callback guesture timeouts
+      const dataUrl = canvas.toDataURL('image/png');
+      const arr = dataUrl.split(',');
+      const mime = arr[0].match(/:(.*?);/)![1];
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      const blob = new Blob([u8arr], { type: mime });
+
+      // Copy to clipboard synchronously
+      if (navigator.clipboard && navigator.clipboard.write) {
+        // @ts-ignore
+        navigator.clipboard.write([
+          // @ts-ignore
+          new ClipboardItem({ [blob.type]: blob })
+        ]).catch(err => console.warn('Clipboard write failed:', err));
+      }
+
+      // 2. Try Web Share API synchronously (attaches the image file natively on mobile phones)
+      if (mode === 'app' && navigator.canShare) {
+        const file = new File([u8arr], `upi_qr_${payeeName.trim().replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}.png`, { type: mime });
+        const shareData = {
+          files: [file],
+          text: text
+        };
+        if (navigator.canShare(shareData)) {
+          navigator.share(shareData).catch((e) => {
+            console.warn('Native share failed or cancelled, opening backup url:', e);
+            window.open(finalUrl, '_blank');
+          });
+          setShowWhatsappModal(false);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('Error preparing synchronous image share:', err);
+    }
+
+    // Fallback: Open URL directly (prefills text message in WhatsApp)
+    window.open(finalUrl, '_blank');
+    setShowWhatsappModal(false);
   };
 
   return (
@@ -523,17 +646,7 @@ export default function App() {
 
         {/* Form Fields */}
         <div className="form-group">
-          <div className="label-row">
-            <label className="form-label" htmlFor="payee-name">1) Your Name (Payee)</label>
-            <label className="toggle-label">
-              <input
-                type="checkbox"
-                checked={showPayeeName}
-                onChange={(e) => setShowPayeeName(e.target.checked)}
-              />
-              Show on Receipt
-            </label>
-          </div>
+          <label className="form-label" htmlFor="payee-name">1) Your Name (Payee)</label>
           <input
             id="payee-name"
             type="text"
@@ -546,17 +659,7 @@ export default function App() {
         </div>
 
         <div className="form-group">
-          <div className="label-row">
-            <label className="form-label" htmlFor="upi-id">2) Your UPI ID (VPA)</label>
-            <label className="toggle-label">
-              <input
-                type="checkbox"
-                checked={showUpiId}
-                onChange={(e) => setShowUpiId(e.target.checked)}
-              />
-              Show on Receipt
-            </label>
-          </div>
+          <label className="form-label" htmlFor="upi-id">2) Your UPI ID (VPA)</label>
           <input
             id="upi-id"
             type="text"
@@ -568,17 +671,7 @@ export default function App() {
         </div>
 
         <div className="form-group">
-          <div className="label-row">
-            <label className="form-label" htmlFor="amount">3) Amount (Optional)</label>
-            <label className="toggle-label">
-              <input
-                type="checkbox"
-                checked={showAmount}
-                onChange={(e) => setShowAmount(e.target.checked)}
-              />
-              Show on Receipt
-            </label>
-          </div>
+          <label className="form-label" htmlFor="amount">3) Amount (Optional)</label>
           <div className="input-wrapper">
             <input
               id="amount"
@@ -595,17 +688,7 @@ export default function App() {
         </div>
 
         <div className="form-group">
-          <div className="label-row">
-            <label className="form-label" htmlFor="customer-name">4) Customer Name (Optional)</label>
-            <label className="toggle-label">
-              <input
-                type="checkbox"
-                checked={showCustomerName}
-                onChange={(e) => setShowCustomerName(e.target.checked)}
-              />
-              Show on Receipt
-            </label>
-          </div>
+          <label className="form-label" htmlFor="customer-name">4) Customer Name (Optional)</label>
           <input
             id="customer-name"
             type="text"
@@ -618,26 +701,28 @@ export default function App() {
         </div>
 
         <div className="form-group">
-          <div className="label-row">
-            <label className="form-label" htmlFor="invoice-id">5) Invoice ID (Optional)</label>
-            <label className="toggle-label">
-              <input
-                type="checkbox"
-                checked={showInvoiceId}
-                onChange={(e) => setShowInvoiceId(e.target.checked)}
-              />
-              Show on Receipt
-            </label>
+          <label className="form-label" htmlFor="invoice-number">5) Invoice Number (INV/26-27/...)</label>
+          <div className="input-wrapper">
+            <span className="invoice-prefix" style={{
+              position: 'absolute',
+              left: '14px',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '14px',
+              color: 'var(--text-secondary)',
+              fontWeight: 500,
+              pointerEvents: 'none'
+            }}>INV/26-27/</span>
+            <input
+              id="invoice-number"
+              type="text"
+              className="form-input input-mono"
+              style={{ paddingLeft: '110px' }}
+              value={invoiceNumber}
+              onChange={(e) => setInvoiceNumber(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
+              placeholder="e.g. 1001"
+              maxLength={10}
+            />
           </div>
-          <input
-            id="invoice-id"
-            type="text"
-            className="form-input input-mono"
-            value={invoiceId}
-            onChange={(e) => setInvoiceId(e.target.value)}
-            placeholder="e.g. INV-2026-001"
-            maxLength={25}
-          />
         </div>
 
         <div className="form-group">
@@ -650,6 +735,19 @@ export default function App() {
             onChange={(e) => setRemarks(e.target.value)}
             placeholder="e.g. Design Invoice"
             maxLength={50}
+          />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label" htmlFor="whatsapp-number">7) WhatsApp Number (Optional)</label>
+          <input
+            id="whatsapp-number"
+            type="text"
+            className="form-input input-mono"
+            value={whatsappNumber}
+            onChange={(e) => setWhatsappNumber(e.target.value.replace(/[^0-9+]/g, ''))}
+            placeholder="e.g. 919876543210 (with country code)"
+            maxLength={15}
           />
         </div>
 
@@ -707,8 +805,8 @@ export default function App() {
                 <input
                   type="range"
                   className="slider-input"
-                  min="200"
-                  max="800"
+                  min="300"
+                  max="900"
                   value={qrY}
                   onChange={(e) => setQrY(parseInt(e.target.value))}
                 />
@@ -745,6 +843,13 @@ export default function App() {
             </svg>
             Download PNG Poster
           </button>
+
+          <button className="btn btn-whatsapp" onClick={handleWhatsAppShare}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.752.002-2.607-1.01-5.059-2.85-6.902C16.643 2.109 14.195.992 11.6.992c-5.445 0-9.87 4.372-9.875 9.757-.002 1.8.48 3.55 1.396 5.105L2.1 21.056l5.055-1.325h-.508zm12.392-7.531c-.303-.151-1.793-.88-2.074-.982-.281-.101-.485-.151-.689.151-.204.302-.79.982-.968 1.189-.179.208-.358.233-.661.082-.303-.151-1.28-.47-2.439-1.499-.902-.801-1.51-1.791-1.687-2.093-.178-.302-.019-.465.132-.615.136-.134.303-.353.454-.529.152-.177.202-.303.303-.504.102-.202.051-.378-.025-.529-.076-.151-.689-1.658-.944-2.271-.249-.597-.502-.516-.689-.526-.178-.009-.383-.011-.587-.011-.204 0-.536.076-.816.378-.28.303-1.071 1.042-1.071 2.541s1.097 2.949 1.25 3.151c.153.202 2.158 3.284 5.228 4.602.73.313 1.299.5 1.743.642.733.232 1.4.199 1.928.121.587-.087 1.793-.73 2.047-1.432.256-.702.256-1.305.179-1.432-.077-.127-.281-.202-.584-.353z" />
+            </svg>
+            Send via WhatsApp
+          </button>
           
           <button className="btn btn-secondary" onClick={resetFormDetails}>
             Reset Form Details
@@ -763,7 +868,7 @@ export default function App() {
 
         {/* Scan Status Instructions */}
         <div className="preview-info">
-          Format: <span>{`upi://pay?pa=${upiId}&pn=${payeeName}${amount ? `&am=${amount}` : ''}&cu=INR${invoiceId ? `&tr=${invoiceId}` : ''}${customerName ? `&tn=${remarks ? `${remarks} - ` : ''}Cust: ${customerName}` : remarks ? `&tn=${remarks}` : ''}`}</span>
+          Format: <span>{`upi://pay?pa=${upiId}&pn=${payeeName}${amount ? `&am=${amount}` : ''}&cu=INR${fullInvoiceId ? `&tr=${fullInvoiceId}` : ''}${customerName ? `&tn=${remarks ? `${remarks} - ` : ''}Cust: ${customerName}` : remarks ? `&tn=${remarks}` : ''}`}</span>
         </div>
         {/* Powered-by footer */}
         <div className="powered-by-footer">
@@ -772,6 +877,51 @@ export default function App() {
         </div>
 
       </div>
+
+      {/* WhatsApp Modal Overlay */}
+      {showWhatsappModal && (
+        <div className="whatsapp-modal-overlay">
+          <div className="whatsapp-modal-card">
+            <h3 className="whatsapp-modal-title">Share via WhatsApp</h3>
+            <p className="whatsapp-modal-desc">
+              The poster has been downloaded and copied to your clipboard.
+              <br /><br />
+              Select your WhatsApp platform below, then simply <strong>paste (Ctrl+V / Cmd+V)</strong> in the chat to send the image!
+            </p>
+            
+            <div className="whatsapp-modal-buttons">
+              <button 
+                className="modal-btn modal-btn-whatsapp" 
+                onClick={() => executeWhatsAppLink('app')}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.752.002-2.607-1.01-5.059-2.85-6.902C16.643 2.109 14.195.992 11.6.992c-5.445 0-9.87 4.372-9.875 9.757-.002 1.8.48 3.55 1.396 5.105L2.1 21.056l5.055-1.325h-.508zm12.392-7.531c-.303-.151-1.793-.88-2.074-.982-.281-.101-.485-.151-.689.151-.204.302-.79.982-.968 1.189-.179.208-.358.233-.661.082-.303-.151-1.28-.47-2.439-1.499-.902-.801-1.51-1.791-1.687-2.093-.178-.302-.019-.465.132-.615.136-.134.303-.353.454-.529.152-.177.202-.303.303-.504.102-.202.051-.378-.025-.529-.076-.151-.689-1.658-.944-2.271-.249-.597-.502-.516-.689-.526-.178-.009-.383-.011-.587-.011-.204 0-.536.076-.816.378-.28.303-1.071 1.042-1.071 2.541s1.097 2.949 1.25 3.151c.153.202 2.158 3.284 5.228 4.602.73.313 1.299.5 1.743.642.733.232 1.4.199 1.928.121.587-.087 1.793-.73 2.047-1.432.256-.702.256-1.305.179-1.432-.077-.127-.281-.202-.584-.353z" />
+                </svg>
+                WhatsApp App (Phone)
+              </button>
+              
+              <button 
+                className="modal-btn modal-btn-web" 
+                onClick={() => executeWhatsAppLink('web')}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                  <line x1="8" y1="21" x2="16" y2="21" />
+                  <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+                WhatsApp Web (Browser)
+              </button>
+            </div>
+            
+            <button 
+              className="modal-btn-close" 
+              onClick={() => setShowWhatsappModal(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );
