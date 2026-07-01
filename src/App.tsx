@@ -11,6 +11,14 @@ export default function App() {
   const [customerName, setCustomerName] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState(() => String(Math.floor(1000 + Math.random() * 9000)));
   const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [transactionDate, setTransactionDate] = useState(() => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  });
+  const [showTransactionDate, setShowTransactionDate] = useState(true);
 
   // Visibility toggles for fields on poster/receipt
   const [showPayeeName, setShowPayeeName] = useState(true);
@@ -21,6 +29,16 @@ export default function App() {
 
   // Derived state
   const fullInvoiceId = invoiceNumber.trim() ? `INV/26-27/${invoiceNumber.trim()}` : '';
+
+  const formatDateForReceipt = (dateStr: string) => {
+    if (!dateStr) return '';
+    const [yyyy, mm, dd] = dateStr.split('-');
+    if (!yyyy || !mm || !dd) return dateStr;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthIndex = parseInt(mm, 10) - 1;
+    const monthName = months[monthIndex] || mm;
+    return `${dd} ${monthName} ${yyyy}`;
+  };
 
   // Canvas / QR State
   const [qrSize, setQrSize] = useState(260);
@@ -58,6 +76,14 @@ export default function App() {
     setShowAmount(true);
     setShowCustomerName(true);
     setShowInvoiceId(true);
+    setTransactionDate(() => {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    });
+    setShowTransactionDate(true);
 
     resetCoordinates();
   };
@@ -102,24 +128,39 @@ export default function App() {
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
 
-      // Construct UPI URL format
-      // upi://pay?pa=UPI_ID&pn=NAME&am=AMOUNT&cu=CURRENCY_CODE&tr=INVOICE_ID&tn=REMARKS
-      let upiUrl = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName)}`;
-      if (amount) {
-        upiUrl += `&am=${amount}`;
+      // Construct NPCI-compliant UPI URL format
+      const upiParams = new URLSearchParams();
+      upiParams.append('pa', upiId.trim());
+      upiParams.append('pn', payeeName.trim());
+      
+      if (amount.trim()) {
+        const parsedAmount = parseFloat(amount);
+        if (!isNaN(parsedAmount) && parsedAmount > 0) {
+          upiParams.append('am', parsedAmount.toFixed(2));
+        }
       }
-      upiUrl += `&cu=INR`; // default currency code
+      
+      upiParams.append('cu', 'INR');
+      
       if (fullInvoiceId) {
-        upiUrl += `&tr=${encodeURIComponent(fullInvoiceId)}`;
+        // Strip out all special characters using /[^a-zA-Z0-9]/g to keep it strictly alphanumeric
+        const cleanInvoiceId = fullInvoiceId.replace(/[^a-zA-Z0-9]/g, '');
+        if (cleanInvoiceId) {
+          upiParams.append('tr', cleanInvoiceId);
+        }
       }
+      
+      upiParams.append('mc', '0000');
       
       let finalRemarks = remarks;
       if (customerName) {
         finalRemarks = finalRemarks ? `${finalRemarks} - Cust: ${customerName}` : `Cust: ${customerName}`;
       }
-      if (finalRemarks) {
-        upiUrl += `&tn=${encodeURIComponent(finalRemarks)}`;
+      if (finalRemarks.trim()) {
+        upiParams.append('tn', finalRemarks.trim());
       }
+      
+      const upiUrl = `upi://pay?${upiParams.toString()}`;
 
       // Generate QR Code as Data URL
       let qrDataUrl = '';
@@ -386,6 +427,9 @@ export default function App() {
         if (showInvoiceId && fullInvoiceId.trim()) {
           receiptFields.push({ label: 'INVOICE ID', value: fullInvoiceId.trim() });
         }
+        if (showTransactionDate && transactionDate) {
+          receiptFields.push({ label: 'DATE', value: formatDateForReceipt(transactionDate) });
+        }
         if (showAmount && amount.trim()) {
           const parsedAmount = parseFloat(amount);
           if (!isNaN(parsedAmount)) {
@@ -399,7 +443,7 @@ export default function App() {
         // Draw Receipt Box (centered vertically where the Glitch Galaxy badge used to be, shifted up by 46px)
         const centerY = (targetY1 + targetY2) / 2;
         const cardW = 500 * scale;
-        const cardH = 190 * scale;
+        const cardH = 205 * scale;
         const cardX = Math.round((canvas.width - cardW) / 2);
         const cardY = Math.round(centerY - cardH / 2) - 46 * scale;
 
@@ -495,6 +539,8 @@ export default function App() {
     showAmount,
     showCustomerName,
     showInvoiceId,
+    transactionDate,
+    showTransactionDate,
     qrSize,
     qrX,
     qrY,
@@ -538,10 +584,7 @@ export default function App() {
   };
 
   const handleWhatsAppShare = () => {
-    // 1. Auto download the poster
-    handleDownload();
-
-    // 2. Open choice modal
+    // Open choice modal (copies image and opens WhatsApp link)
     setShowWhatsappModal(true);
   };
 
@@ -564,6 +607,9 @@ export default function App() {
     }
     if (fullInvoiceId) {
       text += `• *Invoice:* ${fullInvoiceId}\n`;
+    }
+    if (transactionDate) {
+      text += `• *Date:* ${formatDateForReceipt(transactionDate)}\n`;
     }
     if (remarks.trim()) {
       text += `• *Remarks:* ${remarks.trim()}\n`;
@@ -601,13 +647,24 @@ export default function App() {
       }
       const blob = new Blob([u8arr], { type: mime });
 
-      // Copy to clipboard synchronously
+      // Copy to clipboard with explicit 'image/png' type and auto-download fallback
       if (navigator.clipboard && navigator.clipboard.write) {
-        // @ts-ignore
-        navigator.clipboard.write([
+        try {
           // @ts-ignore
-          new ClipboardItem({ [blob.type]: blob })
-        ]).catch(err => console.warn('Clipboard write failed:', err));
+          const clipboardItem = new ClipboardItem({ 'image/png': blob });
+          navigator.clipboard.write([clipboardItem])
+            .then(() => console.log('Poster copied to clipboard successfully!'))
+            .catch((err) => {
+              console.warn('Clipboard write rejected, falling back to download:', err);
+              handleDownload();
+            });
+        } catch (clipErr) {
+          console.warn('Failed to build ClipboardItem, falling back to download:', clipErr);
+          handleDownload();
+        }
+      } else {
+        console.warn('Clipboard API not supported, falling back to download');
+        handleDownload();
       }
 
       // 2. Try Web Share API synchronously (attaches the image file natively on mobile phones)
@@ -724,9 +781,36 @@ export default function App() {
             />
           </div>
         </div>
+        <div className="form-group">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <label className="form-label" htmlFor="transaction-date" style={{ marginBottom: 0 }}>6) Transaction Date</label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 500 }}>
+              <input
+                type="checkbox"
+                checked={showTransactionDate}
+                onChange={(e) => setShowTransactionDate(e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+              Show on Receipt
+            </label>
+          </div>
+          <input
+            id="transaction-date"
+            type="date"
+            className="form-input"
+            value={transactionDate}
+            onChange={(e) => setTransactionDate(e.target.value)}
+            style={{
+              background: 'var(--bg-pitch)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-color)',
+              fontFamily: 'var(--font-mono)'
+            }}
+          />
+        </div>
 
         <div className="form-group">
-          <label className="form-label" htmlFor="remarks">6) Remarks (Optional)</label>
+          <label className="form-label" htmlFor="remarks">7) Remarks (Optional)</label>
           <input
             id="remarks"
             type="text"
