@@ -4,8 +4,8 @@ import './App.css';
 
 export default function App() {
   // Form State
-  const [payeeName, setPayeeName] = useState('Glitch Galaxy');
-  const [upiId, setUpiId] = useState('glitchgalaxy.in@okhdfcbank');
+  const [payeeName, setPayeeName] = useState('');
+  const [upiId, setUpiId] = useState('');
   const [amount, setAmount] = useState('');
   const [remarks, setRemarks] = useState('');
   const [customerName, setCustomerName] = useState('');
@@ -50,22 +50,51 @@ export default function App() {
   // UI state
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showWhatsappModal, setShowWhatsappModal] = useState(false);
+  const [isRendering, setIsRendering] = useState(true);
+  const [toast, setToast] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // References
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Show Toast notification
+  const showToast = (message: string) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToast(message);
+    toastTimeoutRef.current = setTimeout(() => {
+      setToast(null);
+    }, 3200);
+  };
+
+  // Validation
+  const isValidUpi = /^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/.test(upiId.trim());
 
   // Default coordinate helpers
   const resetCoordinates = () => {
     setQrSize(260);
     setQrX(211);
     setQrY(455); // Original Y coordinate
+    showToast('QR offsets reset to default');
+  };
+
+  // Clear all form inputs
+  const clearAllForm = () => {
+    setPayeeName('');
+    setUpiId('');
+    setAmount('');
+    setRemarks('');
+    setCustomerName('');
+    setInvoiceNumber('');
+    setWhatsappNumber('');
+    showToast('All fields cleared');
   };
 
   // Reset all form details and coordinates
   const resetFormDetails = () => {
-    setPayeeName('Glitch Galaxy');
-    setUpiId('glitchgalaxy.in@okhdfcbank');
+    setPayeeName('');
+    setUpiId('');
     setAmount('');
     setRemarks('');
     setCustomerName('');
@@ -86,6 +115,7 @@ export default function App() {
     setShowTransactionDate(true);
 
     resetCoordinates();
+    showToast('Form reset to default');
   };
 
   // Auto center QR both horizontally and vertically
@@ -108,15 +138,56 @@ export default function App() {
   };
 
 
+  // Construct NPCI-compliant UPI URL format
+  const upiParams = new URLSearchParams();
+  upiParams.append('pa', upiId.trim());
+  upiParams.append('pn', payeeName.trim());
+  
+  if (amount.trim()) {
+    const parsedAmount = parseFloat(amount);
+    if (!isNaN(parsedAmount) && parsedAmount > 0) {
+      upiParams.append('am', parsedAmount.toFixed(2));
+    }
+  }
+  
+  upiParams.append('cu', 'INR');
+  
+  if (fullInvoiceId) {
+    // Strip out all special characters using /[^a-zA-Z0-9]/g to keep it strictly alphanumeric
+    const cleanInvoiceId = fullInvoiceId.replace(/[^a-zA-Z0-9]/g, '');
+    if (cleanInvoiceId) {
+      upiParams.append('tr', cleanInvoiceId);
+    }
+  }
+  
+  upiParams.append('mc', '0000');
+  
+  let finalRemarks = remarks;
+  if (customerName) {
+    finalRemarks = finalRemarks ? `${finalRemarks} - Cust: ${customerName}` : `Cust: ${customerName}`;
+  }
+  if (finalRemarks.trim()) {
+    upiParams.append('tn', finalRemarks.trim());
+  }
+  
+  const upiUrl = `upi://pay?${upiParams.toString()}`;
+
   // Main Canvas Drawing Effect
   useEffect(() => {
     let active = true;
 
     const render = async () => {
+      setIsRendering(true);
       const canvas = canvasRef.current;
-      if (!canvas) return;
+      if (!canvas) {
+        setIsRendering(false);
+        return;
+      }
       const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+      if (!ctx) {
+        setIsRendering(false);
+        return;
+      }
 
       const scale = 2; // Resolution multiplier
 
@@ -127,41 +198,6 @@ export default function App() {
       // Enable high quality rendering parameters
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
-
-      // Construct NPCI-compliant UPI URL format
-      const upiParams = new URLSearchParams();
-      upiParams.append('pa', upiId.trim());
-      upiParams.append('pn', payeeName.trim());
-      
-      if (amount.trim()) {
-        const parsedAmount = parseFloat(amount);
-        if (!isNaN(parsedAmount) && parsedAmount > 0) {
-          upiParams.append('am', parsedAmount.toFixed(2));
-        }
-      }
-      
-      upiParams.append('cu', 'INR');
-      
-      if (fullInvoiceId) {
-        // Strip out all special characters using /[^a-zA-Z0-9]/g to keep it strictly alphanumeric
-        const cleanInvoiceId = fullInvoiceId.replace(/[^a-zA-Z0-9]/g, '');
-        if (cleanInvoiceId) {
-          upiParams.append('tr', cleanInvoiceId);
-        }
-      }
-      
-      upiParams.append('mc', '0000');
-      
-      let finalRemarks = remarks;
-      if (customerName) {
-        finalRemarks = finalRemarks ? `${finalRemarks} - Cust: ${customerName}` : `Cust: ${customerName}`;
-      }
-      if (finalRemarks.trim()) {
-        upiParams.append('tn', finalRemarks.trim());
-      }
-      
-      const upiUrl = `upi://pay?${upiParams.toString()}`;
-
       // Generate QR Code as Data URL
       let qrDataUrl = '';
       try {
@@ -301,44 +337,6 @@ export default function App() {
         ctx.lineTo(527 * scale, (700 + shiftY) * scale);
         ctx.stroke();
         ctx.setLineDash([]);
-
-        // --- DRAW GLITCH GALAXY LOGO (ROUNDED CARD) ---
-        try {
-          const logoImg = await loadImage('/assets/logo_glitch.png');
-          if (active) {
-            // Centred in the gap between SCAN TO PAY (Y=300) and QR brackets (~Y=455)
-            const destW = 75 * scale;
-            const destH = Math.round((logoImg.height / logoImg.width) * destW);
-            const destX = Math.round((canvas.width - destW) / 2);
-            // Gap midpoint: (318 + 455) / 2 = 386 -> shift by shiftY
-            const destY = Math.round((386.5 + shiftY) * scale - destH / 2);
-            const radius = 12 * scale;
-
-            // Clip to a rounded rectangle before drawing
-            ctx.save();
-            ctx.beginPath();
-            if (typeof ctx.roundRect === 'function') {
-              ctx.roundRect(destX, destY, destW, destH, radius);
-            } else {
-              // Fallback manual round rect
-              ctx.moveTo(destX + radius, destY);
-              ctx.lineTo(destX + destW - radius, destY);
-              ctx.quadraticCurveTo(destX + destW, destY, destX + destW, destY + radius);
-              ctx.lineTo(destX + destW, destY + destH - radius);
-              ctx.quadraticCurveTo(destX + destW, destY + destH, destX + destW - radius, destY + destH);
-              ctx.lineTo(destX + radius, destY + destH);
-              ctx.quadraticCurveTo(destX, destY + destH, destX, destY + destH - radius);
-              ctx.lineTo(destX, destY + radius);
-              ctx.quadraticCurveTo(destX, destY, destX + radius, destY);
-              ctx.closePath();
-            }
-            ctx.clip();
-            ctx.drawImage(logoImg, destX, destY, destW, destH);
-            ctx.restore();
-          }
-        } catch (e) {
-          console.error('Error drawing Glitch Galaxy logo:', e);
-        }
 
         // Re-draw corner brackets around the QR space
         ctx.strokeStyle = '#000000';
@@ -519,6 +517,10 @@ export default function App() {
         ctx.fillStyle = '#000000';
         ctx.font = '24px Inter';
         ctx.fillText('Failed to load template image.', 100, 500);
+      } finally {
+        if (active) {
+          setIsRendering(false);
+        }
       }
     };
 
@@ -528,6 +530,7 @@ export default function App() {
       active = false;
     };
   }, [
+    upiUrl,
     payeeName,
     upiId,
     amount,
@@ -547,6 +550,48 @@ export default function App() {
     qrColorDark,
     qrColorLight
   ]);
+
+  // Copy raw UPI link
+  const handleCopyUpiLink = async () => {
+    try {
+      await navigator.clipboard.writeText(upiUrl);
+      setCopiedLink(true);
+      showToast('UPI Payment link copied to clipboard!');
+      setTimeout(() => setCopiedLink(false), 2200);
+    } catch {
+      showToast('Copied link: ' + upiUrl);
+    }
+  };
+
+  // Print poster cleanly
+  const handlePrintPoster = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL('image/png');
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      showToast('Popup blocked! Please allow popups to print poster.');
+      return;
+    }
+    printWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>Print UPI QR Poster</title>
+          <style>
+            @page { size: auto; margin: 10mm; }
+            body { margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #fff; }
+            img { max-width: 100%; height: auto; max-height: 95vh; object-fit: contain; }
+          </style>
+        </head>
+        <body>
+          <img src="${dataUrl}" onload="window.print(); window.close();" />
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    showToast('Opening print preview...');
+  };
 
   // Handle PNG Download
   const handleDownload = () => {
@@ -571,7 +616,7 @@ export default function App() {
     } else if (customerPart) {
       fileName = customerPart;
     } else {
-      fileName = 'glitch_galaxy_qr';
+      fileName = 'upi_qr_code';
     }
     
     downloadLink.download = `${fileName}.png`;
@@ -669,7 +714,8 @@ export default function App() {
 
       // 2. Try Web Share API synchronously (attaches the image file natively on mobile phones)
       if (mode === 'app' && navigator.canShare) {
-        const file = new File([u8arr], `upi_qr_${payeeName.trim().replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}.png`, { type: mime });
+        const safePayee = payeeName.trim() ? payeeName.trim().replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() : 'upi';
+        const file = new File([u8arr], `${safePayee}_qr_code.png`, { type: mime });
         const shareData = {
           files: [file],
           text: text
@@ -703,28 +749,51 @@ export default function App() {
 
         {/* Form Fields */}
         <div className="form-group">
-          <label className="form-label" htmlFor="payee-name">1) Your Name (Payee)</label>
+          <label className="form-label" htmlFor="payee-name">1) Payee Name / Business Name</label>
           <input
             id="payee-name"
             type="text"
             className="form-input"
             value={payeeName}
             onChange={(e) => setPayeeName(e.target.value)}
-            placeholder="e.g. Jane Doe"
+            placeholder="e.g. Acme Stores or Jane Doe"
             maxLength={35}
           />
         </div>
 
         <div className="form-group">
-          <label className="form-label" htmlFor="upi-id">2) Your UPI ID (VPA)</label>
+          <div className="label-row">
+            <label className="form-label" htmlFor="upi-id">2) Your UPI ID (VPA)</label>
+            {upiId.trim() && (
+              <span className={`upi-status-badge ${isValidUpi ? 'valid' : 'invalid'}`}>
+                {isValidUpi ? '✓ Valid' : 'Incomplete'}
+              </span>
+            )}
+          </div>
           <input
             id="upi-id"
             type="text"
             className="form-input input-mono"
             value={upiId}
             onChange={(e) => setUpiId(e.target.value)}
-            placeholder="e.g. jane@upi"
+            placeholder="e.g. username@bank"
           />
+          <div className="quick-vpa-suggestions">
+            <span className="vpa-hint">Bank handle:</span>
+            {['@okhdfcbank', '@okaxis', '@okicici', '@oksbi', '@paytm', '@ybl'].map((handle) => (
+              <button
+                key={handle}
+                type="button"
+                className="vpa-chip"
+                onClick={() => {
+                  const base = upiId.includes('@') ? upiId.split('@')[0] : upiId;
+                  setUpiId((base.trim() || 'user') + handle);
+                }}
+              >
+                {handle}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="form-group">
@@ -742,6 +811,32 @@ export default function App() {
             />
             <span className="currency-indicator">INR</span>
           </div>
+          <div className="quick-amounts">
+            {[100, 250, 500, 1000, 2000, 5000].map((val) => (
+              <button
+                key={val}
+                type="button"
+                className={`quick-amount-chip ${amount === String(val) ? 'active' : ''}`}
+                onClick={() => setAmount(String(val))}
+              >
+                ₹{val >= 1000 ? `${val / 1000}k` : val}
+              </button>
+            ))}
+            {amount && (
+              <button
+                type="button"
+                className="quick-amount-chip clear-chip"
+                onClick={() => setAmount('')}
+              >
+                ✕ Clear
+              </button>
+            )}
+          </div>
+          {amount && !isNaN(parseFloat(amount)) && (
+            <div className="amount-formatted-badge">
+              Formatted: <strong>₹{parseFloat(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+            </div>
+          )}
         </div>
 
         <div className="form-group">
@@ -759,26 +854,42 @@ export default function App() {
 
         <div className="form-group">
           <label className="form-label" htmlFor="invoice-number">5) Invoice Number (INV/26-27/...)</label>
-          <div className="input-wrapper">
-            <span className="invoice-prefix" style={{
-              position: 'absolute',
-              left: '14px',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '14px',
-              color: 'var(--text-secondary)',
-              fontWeight: 500,
-              pointerEvents: 'none'
-            }}>INV/26-27/</span>
-            <input
-              id="invoice-number"
-              type="text"
-              className="form-input input-mono"
-              style={{ paddingLeft: '110px' }}
-              value={invoiceNumber}
-              onChange={(e) => setInvoiceNumber(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
-              placeholder="e.g. 1001"
-              maxLength={10}
-            />
+          <div className="invoice-controls-wrapper">
+            <div className="invoice-input-container">
+              <span className="invoice-prefix" style={{
+                position: 'absolute',
+                left: '14px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '14px',
+                color: 'var(--text-secondary)',
+                fontWeight: 500,
+                pointerEvents: 'none'
+              }}>INV/26-27/</span>
+              <input
+                id="invoice-number"
+                type="text"
+                className="form-input input-mono"
+                style={{ paddingLeft: '110px' }}
+                value={invoiceNumber}
+                onChange={(e) => setInvoiceNumber(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
+                placeholder="e.g. 1001"
+                maxLength={10}
+              />
+            </div>
+            <button
+              type="button"
+              className="btn-inline-action"
+              title="Generate New Invoice Number"
+              onClick={() => {
+                const newNum = String(Math.floor(1000 + Math.random() * 9000));
+                setInvoiceNumber(newNum);
+                showToast(`New Invoice generated: INV/26-27/${newNum}`);
+              }}
+            >
+              🎲 New INV#
+            </button>
           </div>
         </div>
         <div className="form-group">
@@ -817,7 +928,7 @@ export default function App() {
             className="form-input"
             value={remarks}
             onChange={(e) => setRemarks(e.target.value)}
-            placeholder="e.g. Design Invoice"
+            placeholder="e.g. Consulting Invoice"
             maxLength={50}
           />
         </div>
@@ -917,7 +1028,7 @@ export default function App() {
           )}
         </div>
 
-        {/* Primary Exporter Buttons */}
+        {/* Primary & Secondary Exporter Buttons */}
         <div className="action-buttons">
           <button className="btn btn-primary" onClick={handleDownload}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -934,10 +1045,34 @@ export default function App() {
             </svg>
             Send via WhatsApp
           </button>
+
+          <div className="secondary-actions-grid">
+            <button className="btn btn-secondary" onClick={handleCopyUpiLink}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+              {copiedLink ? '✓ Copied!' : 'Copy UPI Link'}
+            </button>
+
+            <button className="btn btn-secondary" onClick={handlePrintPoster}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 6 2 18 2 18 9" />
+                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                <rect x="6" y="14" width="12" height="8" />
+              </svg>
+              Print Poster
+            </button>
+          </div>
           
-          <button className="btn btn-secondary" onClick={resetFormDetails}>
-            Reset Form Details
-          </button>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+            <button className="btn btn-secondary" style={{ flex: 1, padding: '8px 10px', fontSize: '11px' }} onClick={clearAllForm}>
+              Clear All Fields
+            </button>
+            <button className="btn btn-secondary" style={{ flex: 1, padding: '8px 10px', fontSize: '11px' }} onClick={resetFormDetails}>
+              Reset Defaults
+            </button>
+          </div>
         </div>
 
       </div>
@@ -947,6 +1082,12 @@ export default function App() {
         
         {/* Live Canvas Display */}
         <div className="poster-card-wrapper">
+          {isRendering && (
+            <div className="canvas-loader-overlay">
+              <div className="loader"></div>
+              <span className="loader-caption">Generating Poster...</span>
+            </div>
+          )}
           <canvas ref={canvasRef} className="poster-canvas" />
         </div>
 
@@ -954,10 +1095,9 @@ export default function App() {
         <div className="preview-info">
           Format: <span>{`upi://pay?pa=${upiId}&pn=${payeeName}${amount ? `&am=${amount}` : ''}&cu=INR${fullInvoiceId ? `&tr=${fullInvoiceId}` : ''}${customerName ? `&tn=${remarks ? `${remarks} - ` : ''}Cust: ${customerName}` : remarks ? `&tn=${remarks}` : ''}`}</span>
         </div>
-        {/* Powered-by footer */}
+        {/* Footer */}
         <div className="powered-by-footer">
-          <img src="/assets/brand_logo.png" alt="Glitch Galaxy" className="powered-by-logo" />
-          <span>Powered by <strong>Glitch Galaxy</strong> QR Code Generator</span>
+          <span className="footer-small-brand">QR generator by GLITCH GALAXY</span>
         </div>
 
       </div>
@@ -1004,6 +1144,17 @@ export default function App() {
               Cancel
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Toast Feedback */}
+      {toast && (
+        <div className="toast-notification">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          <span>{toast}</span>
         </div>
       )}
 

@@ -1,4 +1,4 @@
-/* Glitch Galaxy QR Engine - App Layout & Theme Styling */
+/* UPI QR Code Generator - App Layout & Theme Styling */
 
 .app-container {
   display: flex;
@@ -584,35 +584,21 @@
     font-size: 9px;
   }
 }
-/* Powered-by footer below the canvas */
+/* Footer below the canvas */
 .powered-by-footer {
   display: flex;
   align-items: center;
-  gap: 10px;
   justify-content: center;
-  margin-top: 10px;
-  padding: 10px 16px;
-  background: rgba(255,255,255,0.04);
-  border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.07);
+  margin-top: 14px;
+  padding: 6px 12px;
 }
 
-.powered-by-logo {
-  height: 28px;
-  width: auto;
-  border-radius: 4px;
-  object-fit: contain;
-}
-
-.powered-by-footer span {
+.footer-small-brand {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   letter-spacing: 0.05em;
-}
-
-.powered-by-footer strong {
-  color: var(--text-primary);
+  opacity: 0.75;
 }
 
 /* WhatsApp Modal Overlay Styling */
@@ -743,4 +729,239 @@
     opacity: 1;
     transform: scale(1);
   }
+}
+
+/* HTML: <div class="loader"></div> */
+.loader {
+  width: 60px;
+  aspect-ratio: 1;
+  --g: conic-gradient(from -90deg at 10px 10px,#000 90deg,#0000 0);
+  background: var(--g), var(--g), var(--g);
+  background-size: 50% 50%;
+  animation: l19 1s infinite;
+}
+@keyframes l19 {
+   0%   {background-position:0     0, 10px 10px, 20px 20px}
+   33%  {background-position:10px  10px}
+   66%  {background-position:0    20px,10px 10px,20px 0   }
+   100% {background-position:0     0, 10px 10px, 20px 20px}
+}
+
+/* Canvas Loader Overlay */
+.canvas-loader-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 30;
+  border-radius: 10px;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.loader-caption {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #111111;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Quick Amount Chips */
+.quick-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.quick-amount-chip {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.quick-amount-chip:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.quick-amount-chip.active {
+  background: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
+  font-weight: 700;
+}
+
+.quick-amount-chip.clear-chip {
+  color: #ff6b6b;
+  border-color: rgba(255, 107, 107, 0.3);
+}
+
+.quick-amount-chip.clear-chip:hover {
+  background: rgba(255, 107, 107, 0.15);
+  border-color: #ff6b6b;
+  color: #ffffff;
+}
+
+/* Amount formatted badge */
+.amount-formatted-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.amount-formatted-badge strong {
+  color: #4ade80;
+  font-weight: 700;
+}
+
+/* VPA Quick Suggestions & Validation */
+.quick-vpa-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.vpa-hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: 2px;
+}
+
+.vpa-chip {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.vpa-chip:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.upi-status-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.upi-status-badge.valid {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.upi-status-badge.invalid {
+  background: rgba(251, 146, 60, 0.15);
+  color: #fb923c;
+  border: 1px solid rgba(251, 146, 60, 0.3);
+}
+
+/* Invoice Number Controls */
+.invoice-controls-wrapper {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.invoice-input-container {
+  position: relative;
+  flex: 1;
+}
+
+.btn-inline-action {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.btn-inline-action:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-1px);
+}
+
+/* Action button rows */
+.secondary-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* Toast Notification */
+.toast-notification {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  background: rgba(16, 20, 24, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #ffffff;
+  padding: 12px 18px;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 9999;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.toast-notification svg {
+  color: #4ade80;
+  flex-shrink: 0;
 }
